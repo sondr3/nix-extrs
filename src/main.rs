@@ -1,8 +1,23 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
+use structopt::{clap::AppSettings, StructOpt};
 
 type Error = Box<dyn std::error::Error>;
+
+#[derive(StructOpt, Debug)]
+#[structopt(
+    name = "nix-search",
+    about = "A better nix-search",
+    global_settings = &[AppSettings::ColoredHelp, AppSettings::ArgRequiredElseHelp]
+)]
+struct CLI {
+    #[structopt(short, long)]
+    /// Print verbose output.
+    verbose: bool,
+    /// Package name to search for.
+    package: String,
+}
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 enum NixOS {
@@ -110,8 +125,10 @@ impl Packages {
 }
 
 fn main() -> Result<(), Error> {
-    let config = Config::default().get_packages();
+    let config = Config::default().get_package_list();
+    let cli = CLI::from_args();
 
+    println!("{:?}", cli);
     println!("{:?}", &config);
 
     Ok(())

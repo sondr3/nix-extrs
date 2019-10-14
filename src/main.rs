@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -15,8 +16,11 @@ impl FromStr for NixOS {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "unstable" => Ok(NixOS::UNSTABLE),
             "nixos-unstable" => Ok(NixOS::UNSTABLE),
             "nixpkgs-unstable" => Ok(NixOS::NIXPKGS),
+            "nixpkgs" => Ok(NixOS::NIXPKGS),
+            "stable" => Ok(NixOS::STABLE),
             s if s.starts_with("nixos-") => Ok(NixOS::STABLE),
             _ => Err(()),
         }
@@ -41,7 +45,7 @@ impl Default for Config {
 }
 
 impl Config {
-    fn get_packages(mut self) -> Self {
+    fn get_package_list(mut self) -> Self {
         let resp: Vec<String> = reqwest::get(&format!("{}{}", self.url, self.package_path))
             .expect("Could not fetch packages.")
             .json()
@@ -53,6 +57,55 @@ impl Config {
         }
 
         self
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Packages {
+    commit: String,
+    packages: HashMap<String, Package>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Package {
+    name: String,
+    pname: String,
+    version: String,
+    system: String,
+    meta: Meta,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Meta {
+    available: bool,
+    description: String,
+    homepage: String,
+    license: License,
+    maintainers: Vec<Maintainer>,
+    position: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct License {
+    free: Option<bool>,
+    short_name: String,
+    full_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Maintainer {
+    email: String,
+    github: String,
+    name: String,
+}
+
+impl Packages {
+    fn new() -> Self {
+        Packages {
+            commit: "".into(),
+            packages: HashMap::new(),
+        }
     }
 }
 

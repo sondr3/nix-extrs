@@ -95,7 +95,7 @@ struct Meta {
     available: bool,
     description: String,
     homepage: String,
-    license: License,
+    license: Vec<License>,
     maintainers: Vec<Maintainer>,
     position: String,
 }

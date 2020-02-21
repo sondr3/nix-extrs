@@ -4,7 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use structopt::{clap::AppSettings, StructOpt};
@@ -29,28 +29,28 @@ struct CLI {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct Packages {
-    commit: String,
-    packages: HashMap<String, Package>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
 struct Package {
     name: String,
     pname: String,
     version: String,
-    system: String,
     meta: Meta,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Meta {
-    available: bool,
-    description: String,
-    homepage: String,
-    license: Vec<License>,
-    maintainers: Vec<Maintainer>,
-    position: String,
+    available: Option<bool>,
+    description: Option<String>,
+    homepage: Option<Homepage>,
+    // license: Vec<License>,
+    // maintainers: Vec<Maintainer>,
+    position: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+enum Homepage {
+    Simple(String),
+    List(Vec<String>),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -72,6 +72,7 @@ struct Maintainer {
 struct NixSearch {
     cache_dir: PathBuf,
     package_cache: PathBuf,
+    packages: HashMap<String, Package>,
 }
 
 impl NixSearch {
@@ -85,6 +86,7 @@ impl NixSearch {
         NixSearch {
             cache_dir,
             package_cache,
+            packages: HashMap::new(),
         }
     }
 
@@ -128,17 +130,40 @@ impl NixSearch {
         file.write_all(&command.stdout).unwrap();
         spinner.finish_with_message("Updated!");
     }
+
+    fn read_package_file(&mut self) {
+        let mut bytes = Vec::new();
+        File::open(&self.package_cache)
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+
+        self.packages = serde_json::from_slice(&bytes).unwrap();
+    }
 }
 
 fn main() -> Result<(), Error> {
     let cli = CLI::from_args();
 
-    let search = NixSearch::new();
+    let mut search = NixSearch::new();
     if cli.update {
         search.build_index();
     } else if !search.cache_exists() {
         eprintln!("Cache directory missing, attempting to build index...");
         search.create();
+    }
+
+    search.read_package_file();
+    let name = &cli.package.unwrap();
+    let names = vec![name];
+    let mut pkgs: Vec<_> = search.packages.keys().collect();
+    pkgs.retain(|name| names.contains(name));
+
+    eprintln!("{:?}", pkgs);
+
+    for pkg in pkgs {
+        let pkg = search.packages.get(pkg);
+        println!("{:?}", pkg);
     }
 
     Ok(())

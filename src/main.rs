@@ -1,6 +1,9 @@
+use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::str::FromStr;
+use std::fs::File;
+use std::io::Write;
+use std::process::Command;
 use structopt::{clap::AppSettings, StructOpt};
 
 type Error = Box<dyn std::error::Error>;
@@ -17,62 +20,6 @@ struct CLI {
     verbose: bool,
     /// Package name to search for.
     package: String,
-}
-
-#[derive(Debug, Eq, PartialEq, Hash)]
-enum NixOS {
-    STABLE,
-    UNSTABLE,
-    NIXPKGS,
-}
-
-impl FromStr for NixOS {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "unstable" => Ok(NixOS::UNSTABLE),
-            "nixos-unstable" => Ok(NixOS::UNSTABLE),
-            "nixpkgs-unstable" => Ok(NixOS::NIXPKGS),
-            "nixpkgs" => Ok(NixOS::NIXPKGS),
-            "stable" => Ok(NixOS::STABLE),
-            s if s.starts_with("nixos-") => Ok(NixOS::STABLE),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Config {
-    url: String,
-    package_path: String,
-    packages: HashMap<NixOS, String>,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            url: "https://nixos.org/nixpkgs/".into(),
-            package_path: "packages-channels.json".into(),
-            packages: HashMap::new(),
-        }
-    }
-}
-
-impl Config {
-    fn get_package_list(mut self) -> Self {
-        let resp: Vec<String> = reqwest::get(&format!("{}{}", self.url, self.package_path))
-            .expect("Could not fetch packages.")
-            .json()
-            .expect("Could not deserialize JSON response.");
-
-        for version in resp {
-            let nix = NixOS::from_str(&version).expect("Could not parse NixOS version");
-            self.packages.insert(nix, version);
-        }
-
-        self
-    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -116,20 +63,36 @@ struct Maintainer {
 }
 
 impl Packages {
-    fn new() -> Self {
-        Packages {
-            commit: "".into(),
-            packages: HashMap::new(),
+    fn build_index() {
+        let spinner = ProgressBar::new_spinner();
+        spinner.enable_steady_tick(80);
+        spinner.set_style(
+            ProgressStyle::default_spinner()
+                .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", ""])
+                .template("{spinner} {msg:.green}"),
+        );
+        spinner.set_message("Building package index...");
+
+        let mut file = File::create("pkgs.json").unwrap();
+        let command = Command::new("nix-env")
+            .args(&["-f", "<nixpkgs>", "-qa", "--json"])
+            .output()
+            .unwrap();
+
+        if !&command.status.success() {
+            panic!("ohno");
         }
+
+        file.write_all(&command.stdout).unwrap();
+        spinner.finish_with_message("Updated!");
     }
 }
 
 fn main() -> Result<(), Error> {
-    let config = Config::default().get_package_list();
     let cli = CLI::from_args();
-
     println!("{:?}", cli);
-    println!("{:?}", &config);
+
+    Packages::build_index();
 
     Ok(())
 }

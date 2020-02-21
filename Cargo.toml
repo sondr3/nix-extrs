@@ -5,7 +5,8 @@ authors = ["Sondre Nilsen <nilsen.sondre@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-dirs = "2.0"
+colored = "1.9"
+directories = "2.0"
 indicatif = "0.14.0"
 structopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
